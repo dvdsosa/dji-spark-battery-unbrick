@@ -1,27 +1,29 @@
 #!/bin/bash
-# reset_pf.sh — Borra el Permanent Fail (PF) de una batería DJI Spark a través
-# del Arduino con spark_unbrick.ino (comando 'A': unseal -> 0x0029 -> reset -> seal).
+# reset_pf.sh — Clear the Permanent Fail (PF) of a DJI Spark battery through an
+# Arduino running spark_unbrick.ino ('A' command: unseal -> 0x0029 -> reset -> seal).
 #
-# Uso:   ./reset_pf.sh [puerto]          # por defecto /dev/cu.usbserial-10
+# Usage: ./reset_pf.sh [port]            # default /dev/cu.usbserial-10
 #
-# Antes de escribir comprueba la estabilidad del bus (300 lecturas, 0 errores)
-# y pide confirmación. Si alguna celda está por debajo de 2 V, el sketch vuelve
-# a preguntar y la respuesta la das tú.
+# Before writing it checks bus stability (300 reads, 0 errors) and asks for
+# confirmation. If a cell is below 2 V the sketch asks again and you answer.
+#
+# If the lowest cell is below the undervoltage threshold (~2.2 V) the PF
+# re-latches 2-3 s after the reset; use pf_pump.sh in that case.
 
 PORT=${1:-/dev/cu.usbserial-10}
 R=$'\033[31m'; G=$'\033[32m'; Y=$'\033[33m'; B=$'\033[1m'; N=$'\033[0m'
 
-[ -e "$PORT" ] || { echo "No existe $PORT. ¿Arduino conectado?"; exit 1; }
+[ -e "$PORT" ] || { echo "$PORT not found. Is the Arduino connected?"; exit 1; }
 
 exec 3<>"$PORT" || exit 1
 stty -f "$PORT" 115200 cs8 -cstopb -parenb raw -echo -hupcl
 trap 'exec 3>&- 2>/dev/null' EXIT
 sleep 3
-while read -r -t 1 _ <&3; do :; done          # descarta el menú de arranque
+while read -r -t 1 _ <&3; do :; done          # drop the boot menu
 
-# Lee líneas del Arduino hasta que una contenga el patrón (o venza el plazo).
-# Imprime cada línea; deja la última en $LAST.
-read_until() {  # read_until <regex> <segundos>
+# Read Arduino lines until one matches the regex (or the timeout expires).
+# Prints every line; leaves the last one in $LAST.
+read_until() {  # read_until <regex> <seconds>
   local end=$(( $(date +%s) + $2 )) line
   LAST=""
   while (( $(date +%s) < end )); do
@@ -34,35 +36,35 @@ read_until() {  # read_until <regex> <segundos>
   return 1
 }
 
-echo "${B}1) Comprobando la conexión con la batería...${N}"
+echo "${B}1) Checking the connection to the battery...${N}"
 printf 'T' >&3
-if ! read_until 'Errores: [0-9]+' 20; then
-  echo "${R}Sin respuesta del Arduino.${N}"; exit 1
+if ! read_until 'Errors: [0-9]+' 20; then
+  echo "${R}No reply from the Arduino.${N}"; exit 1
 fi
-ERR=$(sed -E 's/.*Errores: ([0-9]+).*/\1/' <<< "$LAST")
+ERR=$(sed -E 's/.*Errors: ([0-9]+).*/\1/' <<< "$LAST")
 read_until 'Bus' 3 >/dev/null
 if [ "$ERR" != "0" ]; then
-  echo "${R}${B}Bus inestable ($ERR errores de 300).${N} Sujeta mejor SDA/SCL y los 12 V, y repite."
-  echo "No se ha escrito nada en la batería."
+  echo "${R}${B}Unstable bus ($ERR errors out of 300).${N} Secure SDA/SCL and the supply, then retry."
+  echo "Nothing was written to the battery."
   exit 1
 fi
-echo "${G}Conexión estable.${N}"
+echo "${G}Connection stable.${N}"
 echo
 
-echo "${B}2) Estado actual:${N}"
+echo "${B}2) Current status:${N}"
 printf 'I' >&3
-read_until '^=+$' 15                          # hasta la línea final de '='
+read_until '^=+$' 15                          # up to the closing '=' line
 echo
 
-echo "${Y}${B}Se va a desbloquear el BMS y borrar el fallo permanente.${N}"
-echo "Mantén los 12 V conectados hasta que termine y ten el cargador DJI preparado."
-read -r -p "¿Continuar? (s/N) " ans
-[[ $ans == [sSyY]* ]] || { echo "Cancelado. No se ha escrito nada."; exit 0; }
+echo "${Y}${B}The BMS will be unsealed and its permanent fail cleared.${N}"
+echo "Keep the wake-up supply connected until it finishes and have the DJI charger ready."
+read -r -p "Continue? (y/N) " ans
+[[ $ans == [yY]* ]] || { echo "Cancelled. Nothing was written."; exit 0; }
 echo
 
-echo "${B}3) Recuperación:${N}"
+echo "${B}3) Recovery:${N}"
 printf 'A' >&3
-END_RE='\[OK\] PF borrado|\[!\] El PF sigue|No se pudo hacer unseal|No responde en 0x0B|Cancelado'
+END_RE='\[OK\] PF cleared|\[!\] PF still active|Unseal failed|No reply at 0x0B|Cancelled'
 end=$(( $(date +%s) + 120 ))
 RESULT=""
 while (( $(date +%s) < end )); do
@@ -70,21 +72,20 @@ while (( $(date +%s) < end )); do
   line=${line%$'\r'}
   printf '%s\n' "$line"
   if [[ $line == *"(y/n)"* ]]; then
-    read -r -p "> (s/N) " a </dev/tty
-    if [[ $a == [sSyY]* ]]; then printf 'y' >&3; else printf 'n' >&3; fi
+    read -r -p "> (y/N) " a </dev/tty
+    if [[ $a == [yY]* ]]; then printf 'y' >&3; else printf 'n' >&3; fi
   fi
   if [[ $line =~ $END_RE ]]; then RESULT=$line; break; fi
 done
 echo
 
 case $RESULT in
-  *"[OK] PF borrado"*)
-    echo "${G}${B}PF borrado.${N}"
-    echo "${B}AHORA, sin esperar:${N} quita los 12 V y los cables del Arduino y pon la"
-    echo "batería en el cargador DJI. Si las celdas siguen por debajo del umbral de"
-    echo "subtensión (~2,2 V), el chip vuelve a bloquearse en menos de un minuto." ;;
+  *"[OK] PF cleared"*)
+    echo "${G}${B}PF cleared.${N}"
+    echo "If the lowest cell is above ~2.2 V, move the battery to the DJI charger now."
+    echo "If it is below, the PF will re-latch within seconds: run pf_pump.sh instead." ;;
   "")
-    echo "${R}No terminó en 120 s. Revisa la salida de arriba.${N}"; exit 1 ;;
+    echo "${R}Did not finish within 120 s. Check the output above.${N}"; exit 1 ;;
   *)
-    echo "${R}${B}No se completó:${N} $RESULT"; exit 1 ;;
+    echo "${R}${B}Not completed:${N} $RESULT"; exit 1 ;;
 esac

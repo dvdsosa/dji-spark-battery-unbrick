@@ -1,8 +1,10 @@
 # dji-spark-battery-unbrick
 
 Recuperación de baterías **DJI Spark** bloqueadas en *Permanent Fail* (PF) tras
-pasar mucho tiempo descargadas, con un Arduino Uno/Nano y dos scripts de bash
-para macOS.
+pasar mucho tiempo descargadas, con un Arduino Uno/Nano y tres scripts de
+bash para macOS. Probado con dos baterías reales (celdas entre 1,77 y 2,2 V).
+
+![monitor_charge.sh](docs/monitor_charge.png)
 
 *English summary at the end.*
 
@@ -16,8 +18,10 @@ para macOS.
 | Ruta | Qué es |
 |---|---|
 | `spark_unbrick/spark_unbrick.ino` | Sketch con menú por serie (115200): lectura, unseal, borrado de PF, reset, sellado, volcado CSV |
-| `scripts/reset_pf.sh` | Comprueba el bus, muestra el estado, pide confirmación y ejecuta la recuperación |
-| `scripts/monitor_carga.sh` | Monitor en pantalla fija (sin scroll): tensión por celda con barras, corriente, temperatura, PF y avisos; guarda CSV en `logs/` |
+| `scripts/pf_pump.sh` | "Bombeo": repite unseal → borrar PF → reset hasta que la celda más baja supera el umbral y el BMS se queda precargando solo |
+| `scripts/reset_pf.sh` | Recuperación de una sola ronda (para celdas ya por encima del umbral) |
+| `scripts/monitor_charge.sh` | Monitor en pantalla fija (sin scroll): tensión por celda con barras, corriente, temperatura, PF y avisos; guarda CSV en `logs/` |
+| `docs/monitor_charge.png` | Captura del monitor durante una precarga real |
 | `docs/cableado_12v.svg` | Esquema con fuente de 12 V y 100 Ω (probado) |
 | `docs/cableado_9v.svg` | Esquema con pila de 9 V (alternativa) |
 
@@ -32,8 +36,16 @@ SMBus. Además, si las celdas siguen por debajo del umbral, **vuelve a saltar**
 **a los 2–3 s del reset** (medido: con la celda más baja a 2,18 V, el PF
 volvió a registrarse 3,3 s después del `DeviceReset`; el umbral parece rondar
 los 2,2 V). Con celdas por debajo de ese umbral no da tiempo a llevar la
-batería al cargador: hay que subir antes las celdas por encima del umbral
-(precarga externa) y después borrar el PF.
+batería al cargador.
+
+**Solución que ha funcionado: bombeo (`pf_pump.sh`).** Durante los 2–3 s que
+el PF tarda en volver a saltar, el BMS precarga desde la fuente (~13 mA a
+través de 100 Ω). Cada ronda unseal → `0x0029` → reset sube las celdas unos
+6–10 mV. En la batería probada el PF dejó de saltar en la **ronda 3** (celda
+más baja 2,20 V), con solo 2 escrituras extra de PF en la flash del BMS, y a
+partir de ahí el BMS entró en precarga normal por sí solo (bit `PCHG` activo),
+con todas sus protecciones activas. En unos minutos las celdas pasaron de
+2,2 V a 2,7 V y el desequilibrio bajó de 207 a 33 mV.
 
 ## Hardware
 
@@ -89,16 +101,23 @@ arduino-cli upload -p /dev/cu.usbserial-10 --fqbn arduino:avr:uno spark_unbrick
 
 1. Conecta datos y fuente. Comprueba en el monitor serie (`S`, `W`, `T`, `I`)
    que el BMS responde y que el test de bus da **0 errores**.
-2. `./scripts/reset_pf.sh` → confirma → espera a `PF borrado`.
-3. **Inmediatamente** quita fuente y cables y pon la batería en el cargador DJI.
-   Solo funciona si la celda más baja ya está por encima de ~2,2 V; si no, el
-   PF vuelve a saltar en 2–3 s.
-4. Si el cargador no la acepta o el PF vuelve (se puede ver con
-   `./scripts/monitor_carga.sh` o `I`), repite.
+2. Celda más baja por debajo de ~2,2 V: `./scripts/pf_pump.sh` → confirma →
+   espera a `PF stays clear`. Por encima: `./scripts/reset_pf.sh`.
+3. Deja la fuente conectada y vigila con `./scripts/monitor_charge.sh` mientras
+   el BMS precarga.
+4. Cuando la celda más baja esté holgadamente por encima del umbral (el monitor
+   avisa a 3,0 V por defecto), quita la fuente y pon la batería en el cargador
+   DJI. Vigila la primera carga completa.
 
-`monitor_carga.sh [intervalo_s] [objetivo_mV] [puerto]` — por defecto 10 s,
+`pf_pump.sh [max_rondas] [puerto]` — por defecto 30 rondas. Comprueba el bus
+antes de escribir, pide confirmación (escribir `yes` si alguna celda < 2 V) y
+se detiene por temperatura > 35 °C, fallo de unseal o pérdida de comunicación.
+
+`monitor_charge.sh [intervalo_s] [objetivo_mV] [puerto]` — por defecto 10 s,
 3000 mV y `/dev/cu.usbserial-10`. Solo lee (comando `D`). Avisa con alarma si
 la temperatura supera 40 °C, si el PF se reactiva o al alcanzar el objetivo.
+
+Los scripts y la salida del sketch están en inglés.
 
 ### Menú del sketch
 
@@ -142,14 +161,21 @@ del byte equivocado de la respuesta y tratan `SEC=1` como "unsealed", y envían
 
 ## English summary
 
-Arduino (Uno/Nano) sketch plus two macOS bash scripts to recover DJI Spark
+Arduino (Uno/Nano) sketch plus three macOS bash scripts to recover DJI Spark
 batteries whose BQ40Z307 ("BQ9003") BMS latched Permanent Fail after deep
 discharge. Unseal key `0xCCDF7EE0`, then `PermanentFailDataReset` (0x0029),
-`DeviceReset`, seal. The PF re-latches within a minute if a cell is still below
-the undervoltage threshold (~2.2 V), so move the pack to the DJI charger right
-after clearing. `monitor_carga.sh` shows a live, fixed-screen dashboard and
-logs CSV. Deeply discharged Li-ion cells are a fire risk: charge supervised,
-on a non-flammable surface.
+`DeviceReset`, seal.
+
+If the lowest cell is below the undervoltage threshold (~2.2 V) the PF
+re-latches 2-3 s after the reset. `pf_pump.sh` repeats unseal → clear → reset:
+each short window lets the BMS precharge a few mV from the 12 V / 100 Ω supply.
+On the tested pack the PF stopped re-latching after 3 rounds and the BMS then
+kept precharging on its own with all protections active. `monitor_charge.sh`
+shows a live, fixed-screen dashboard (screenshot above) and logs CSV. Wiring
+option A (12 V supply through 100 Ω) is the one tested here.
+
+Deeply discharged Li-ion cells are a fire risk: charge supervised, on a
+non-flammable surface.
 
 ## Licencia
 
