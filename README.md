@@ -23,6 +23,7 @@ were recovered** with the 12 V supply, `pf_pump.sh` and `monitor_charge.sh`.
 | `docs/monitor_charge.png` | Screenshot of the monitor during a real precharge |
 | `docs/wiring_12v.svg` | Wiring with a 12 V supply and 100 Ω (tested) |
 | `docs/wiring_9v.svg` | Wiring with a 9 V battery (alternative) |
+| `docs/spark_pinout.png` | Spark battery connector with pin numbers |
 
 ## The problem
 
@@ -75,6 +76,8 @@ Pins 2 and 5 are the battery's two ground pins; check with a multimeter
 (continuity ≈ 0 Ω) before building either option.
 
 Battery connector, contacts facing you, left to right:
+
+![Spark battery connector pinout](docs/spark_pinout.png)
 
 ```
   1     2     3     4     5     6
