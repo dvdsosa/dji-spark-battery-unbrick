@@ -29,8 +29,11 @@ El BMS del Spark es un TI **BQ40Z307** con firmware DJI (serigrafiado
 los MOSFET de carga y descarga. La batería parece muerta y el cargador no la
 acepta. El PF **no se borra solo** al subir la tensión: hay que borrarlo por
 SMBus. Además, si las celdas siguen por debajo del umbral, **vuelve a saltar**
-en menos de un minuto (observado: con una celda a ~2,17 V se reactivó en
-<60 s; el umbral parece rondar los 2,2 V).
+**a los 2–3 s del reset** (medido: con la celda más baja a 2,18 V, el PF
+volvió a registrarse 3,3 s después del `DeviceReset`; el umbral parece rondar
+los 2,2 V). Con celdas por debajo de ese umbral no da tiempo a llevar la
+batería al cargador: hay que subir antes las celdas por encima del umbral
+(precarga externa) y después borrar el PF.
 
 ## Hardware
 
@@ -88,6 +91,8 @@ arduino-cli upload -p /dev/cu.usbserial-10 --fqbn arduino:avr:uno spark_unbrick
    que el BMS responde y que el test de bus da **0 errores**.
 2. `./scripts/reset_pf.sh` → confirma → espera a `PF borrado`.
 3. **Inmediatamente** quita fuente y cables y pon la batería en el cargador DJI.
+   Solo funciona si la celda más baja ya está por encima de ~2,2 V; si no, el
+   PF vuelve a saltar en 2–3 s.
 4. Si el cargador no la acepta o el PF vuelve (se puede ver con
    `./scripts/monitor_carga.sh` o `I`), repite.
 
