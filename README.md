@@ -1,191 +1,167 @@
 # dji-spark-battery-unbrick
 
-Recuperación de baterías **DJI Spark** bloqueadas en *Permanent Fail* (PF) tras
-pasar mucho tiempo descargadas, con un Arduino Uno/Nano y tres scripts de
-bash para macOS. Probado con dos baterías reales (celdas entre 1,77 y 2,2 V):
-**las dos se recuperaron** con la fuente de 12 V, `pf_pump.sh` y
-`monitor_charge.sh`.
+Recover **DJI Spark** batteries stuck in *Permanent Fail* (PF) after sitting
+discharged for a long time, using an Arduino Uno/Nano and three bash scripts
+for macOS. Tested on two real packs (cells between 1.77 and 2.2 V): **both
+were recovered** with the 12 V supply, `pf_pump.sh` and `monitor_charge.sh`.
 
 ![monitor_charge.sh](docs/monitor_charge.png)
 
-*English summary at the end.*
+> **Safety.** A Li-ion cell that has been below ~2 V may be internally damaged
+> and can catch fire when recharged. Do not recover swollen packs. Do the
+> first charge outdoors or on a non-flammable surface, and keep an eye on it.
+> Use at your own risk.
 
-> **Seguridad.** Una celda Li-ion que ha estado por debajo de ~2 V puede tener
-> daño interno y provocar un incendio al recargarse. No recuperes baterías
-> hinchadas. Haz la primera carga al aire libre o sobre superficie no
-> inflamable, sin perderla de vista. Uso bajo tu responsabilidad.
+## Contents
 
-## Contenido
-
-| Ruta | Qué es |
+| Path | What it is |
 |---|---|
-| `spark_unbrick/spark_unbrick.ino` | Sketch con menú por serie (115200): lectura, unseal, borrado de PF, reset, sellado, volcado CSV |
-| `scripts/pf_pump.sh` | "Bombeo": repite unseal → borrar PF → reset hasta que la celda más baja supera el umbral y el BMS se queda precargando solo |
-| `scripts/reset_pf.sh` | Recuperación de una sola ronda (para celdas ya por encima del umbral) |
-| `scripts/monitor_charge.sh` | Monitor en pantalla fija (sin scroll): tensión por celda con barras, corriente, temperatura, PF y avisos; guarda CSV en `logs/` |
-| `docs/monitor_charge.png` | Captura del monitor durante una precarga real |
-| `docs/wiring_12v.svg` | Esquema con fuente de 12 V y 100 Ω (probado) |
-| `docs/wiring_9v.svg` | Esquema con pila de 9 V (alternativa) |
+| `spark_unbrick/spark_unbrick.ino` | Sketch with a serial menu (115200): status, unseal, PF clear, reset, seal, CSV dump |
+| `scripts/pf_pump.sh` | "Pumping": repeats unseal → clear PF → reset until the lowest cell is above the threshold and the BMS keeps precharging on its own |
+| `scripts/reset_pf.sh` | Single-round recovery (for cells already above the threshold) |
+| `scripts/monitor_charge.sh` | Fixed-screen monitor (no scrolling): per-cell voltage bars, current, temperature, PF state and warnings; logs CSV to `logs/` |
+| `docs/monitor_charge.png` | Screenshot of the monitor during a real precharge |
+| `docs/wiring_12v.svg` | Wiring with a 12 V supply and 100 Ω (tested) |
+| `docs/wiring_9v.svg` | Wiring with a 9 V battery (alternative) |
 
-## El problema
+## The problem
 
-El BMS del Spark es un TI **BQ40Z307** con firmware DJI (serigrafiado
-"BQ9003"), en la dirección SMBus `0x0B`. Si una celda baja del umbral de
-*Safety Cell Undervoltage*, el chip registra un PF en su memoria flash y abre
-los MOSFET de carga y descarga. La batería parece muerta y el cargador no la
-acepta. El PF **no se borra solo** al subir la tensión: hay que borrarlo por
-SMBus. Además, si las celdas siguen por debajo del umbral, **vuelve a saltar**
-**a los 2–3 s del reset** (medido: con la celda más baja a 2,18 V, el PF
-volvió a registrarse 3,3 s después del `DeviceReset`; el umbral parece rondar
-los 2,2 V). Con celdas por debajo de ese umbral no da tiempo a llevar la
-batería al cargador.
+The Spark BMS is a TI **BQ40Z307** running DJI firmware (marked "BQ9003"), at
+SMBus address `0x0B`. When a cell drops below the *Safety Cell Undervoltage*
+threshold, the chip latches a PF in its data flash and opens the charge and
+discharge MOSFETs. The battery looks dead and the charger rejects it. The PF
+**does not clear itself** when the voltage rises: it has to be cleared over
+SMBus. And if the cells are still below the threshold, it **re-latches 2–3 s
+after the reset** (measured: with the lowest cell at 2.18 V, the PF was logged
+again 3.3 s after `DeviceReset`; the threshold appears to be about 2.2 V).
+With cells below that threshold there is no time to move the battery to the
+charger.
 
-**Solución que ha funcionado: bombeo (`pf_pump.sh`).** Durante los 2–3 s que
-el PF tarda en volver a saltar, el BMS precarga desde la fuente (~13 mA a
-través de 100 Ω). Cada ronda unseal → `0x0029` → reset sube las celdas unos
-6–10 mV. En la batería probada el PF dejó de saltar en la **ronda 3** (celda
-más baja 2,20 V), con solo 2 escrituras extra de PF en la flash del BMS, y a
-partir de ahí el BMS entró en precarga normal por sí solo (bit `PCHG` activo),
-con todas sus protecciones activas. En unos minutos las celdas pasaron de
-2,2 V a 2,7 V y el desequilibrio bajó de 207 a 33 mV. La segunda batería
-necesitó lanzar `pf_pump.sh` unas 2–3 veces (con el antiguo límite de 30
-rondas); por eso el límite por defecto es ahora 90.
+**What worked: pumping (`pf_pump.sh`).** During the 2–3 s before the PF
+re-latches, the BMS precharges from the supply (~13 mA through 100 Ω). Each
+unseal → `0x0029` → reset round lifts the cells by about 6–10 mV. On the tested
+pack the PF stopped re-latching at **round 3** (lowest cell 2.20 V), with only
+2 extra PF writes to the BMS flash. From then on the BMS entered normal
+precharge by itself (`PCHG` bit set), with all its protections active. Within
+minutes the cells went from 2.2 V to 2.7 V and the cell spread dropped from
+207 to 33 mV. The second pack needed `pf_pump.sh` to be run about 2–3 times
+(with the old 30-round limit), which is why the default limit is now 90.
 
 ## Hardware
 
-- Arduino Uno o Nano (ATmega328P, 5 V)
-- 2 × 4,7 kΩ (pull-ups de SDA y SCL a 5 V)
-- Fuente de 9–12 V para alimentar el BMS dormido, con **100 Ω en serie** si no
-  tiene limitación de corriente (el BMS consume pocos mA; la resistencia limita
-  cualquier cortocircuito accidental)
+- Arduino Uno or Nano (ATmega328P, 5 V)
+- 2 × 4.7 kΩ (SDA and SCL pull-ups to 5 V)
+- 9–12 V supply to power the sleeping BMS, with **100 Ω in series** if it is
+  not current-limited (the BMS only draws a few mA; the resistor limits any
+  accidental short)
 
-### Opción A — fuente de 12 V con 100 Ω en serie (probada en este proyecto)
+### Option A — 12 V supply with 100 Ω in series (tested in this project)
 
-Es el montaje con el que se han recuperado las baterías de este repositorio:
-Arduino Uno clónico, GND del Arduino en el pin 2 y la fuente de 12 V en los
-pines 3 (+, a través de 100 Ω) y 5 (−).
+This is the setup used to recover the batteries in this repository: a clone
+Arduino Uno, Arduino GND on pin 2 and the 12 V supply on pins 3 (+, through
+100 Ω) and 5 (−).
 
-![Cableado con fuente de 12 V (probado)](docs/wiring_12v.svg)
+![Wiring with a 12 V supply (tested)](docs/wiring_12v.svg)
 
-### Opción B — pila de 9 V (alternativa, no probada aquí)
+### Option B — 9 V battery (alternative, not tested here)
 
-Montaje descrito por la comunidad: GND del Arduino en el pin 5 y la pila PP3
-directamente en los pines 3 (+) y 2 (−). Una pila de 9 V no puede dar
-corrientes peligrosas, por eso no lleva resistencia en serie.
+Setup described by the community: Arduino GND on pin 5 and a PP3 battery
+directly on pins 3 (+) and 2 (−). A 9 V battery cannot deliver dangerous
+currents, so it has no series resistor.
 
-![Cableado con pila de 9 V (alternativa)](docs/wiring_9v.svg)
+![Wiring with a 9 V battery (alternative)](docs/wiring_9v.svg)
 
-Los pines 2 y 5 son las dos masas de la batería; compruébalo con el polímetro
-(continuidad ≈ 0 Ω) antes de montar cualquiera de las dos opciones.
+Pins 2 and 5 are the battery's two ground pins; check with a multimeter
+(continuity ≈ 0 Ω) before building either option.
 
-Conector de la batería, contactos mirando hacia ti, de izquierda a derecha:
+Battery connector, contacts facing you, left to right:
 
 ```
   1     2     3     4     5     6
  SCL   GND   BAT+  BAT+  GND   SDA
 ```
 
-| Batería | Arduino / fuente (opción A, probada) |
+| Battery | Arduino / supply (option A, tested) |
 |---|---|
-| 1 SCL | A5 (+ 4,7 kΩ a 5V) |
-| 6 SDA | A4 (+ 4,7 kΩ a 5V) |
-| 2 GND | GND del Arduino |
-| 3 BAT+ | + de la fuente, a través de 100 Ω |
-| 5 GND | − de la fuente |
+| 1 SCL | A5 (+ 4.7 kΩ to 5V) |
+| 6 SDA | A4 (+ 4.7 kΩ to 5V) |
+| 2 GND | Arduino GND |
+| 3 BAT+ | Supply +, through 100 Ω |
+| 5 GND | Supply − |
 
-El esquema de circuitschools (SDA=pin 5, SCL=pin 6) es para Mavic Air, **no**
-para Spark.
+The circuitschools pinout (SDA = pin 5, SCL = pin 6) is for the Mavic Air,
+**not** the Spark.
 
-## Uso
+## Usage
 
 ```bash
 arduino-cli compile --fqbn arduino:avr:uno spark_unbrick
 arduino-cli upload -p /dev/cu.usbserial-10 --fqbn arduino:avr:uno spark_unbrick
 ```
 
-1. Conecta datos y fuente. Comprueba en el monitor serie (`S`, `W`, `T`, `I`)
-   que el BMS responde y que el test de bus da **0 errores**.
-2. Celda más baja por debajo de ~2,2 V: `./scripts/pf_pump.sh` → confirma →
-   espera a `PF stays clear`. Por encima: `./scripts/reset_pf.sh`.
-3. Deja la fuente conectada y vigila con `./scripts/monitor_charge.sh` mientras
-   el BMS precarga.
-4. Cuando la celda más baja esté holgadamente por encima del umbral (el monitor
-   avisa a 3,0 V por defecto), quita la fuente y pon la batería en el cargador
-   DJI. Vigila la primera carga completa.
+1. Connect the data lines and the supply. In the serial monitor (`S`, `W`,
+   `T`, `I`) check that the BMS answers and that the bus test reports
+   **0 errors**.
+2. Lowest cell below ~2.2 V: `./scripts/pf_pump.sh` → confirm → wait for
+   `PF stays clear`. Above it: `./scripts/reset_pf.sh`.
+3. Leave the supply connected and watch with `./scripts/monitor_charge.sh`
+   while the BMS precharges.
+4. Once the lowest cell is comfortably above the threshold (the monitor alerts
+   at 3.0 V by default), remove the supply and put the battery on the DJI
+   charger. Supervise the whole first charge.
 
-`pf_pump.sh [max_rondas] [puerto]` — por defecto 90 rondas. Comprueba el bus
-antes de escribir y pide confirmación (escribir `yes` si alguna celda < 2 V).
-Termina solo en cuanto el PF deja de reactivarse (lo comprueba en reposo y
-otra vez 10 s después: `PF stays clear`), o al agotar las rondas, o si la
-temperatura supera 35 °C, falla el unseal o se pierde la comunicación. Cada
-ronda en la que el PF vuelve a saltar es una escritura en la flash del BMS,
-de resistencia limitada: si 90 rondas no bastan, mejor precargar las celdas
-por fuera que seguir insistiendo.
+`pf_pump.sh [max_rounds] [port]` — 90 rounds by default. It checks the bus
+before writing and asks for confirmation (type `yes` if any cell is < 2 V). It
+stops by itself as soon as the PF no longer re-latches (checked at rest and
+again 10 s later: `PF stays clear`), or when the rounds run out, or if the
+temperature exceeds 35 °C, the unseal fails or communication is lost. Every
+round in which the PF re-latches is a write to the BMS flash, which has
+limited endurance: if 90 rounds are not enough, precharge the cells directly
+instead of insisting.
 
-`monitor_charge.sh [intervalo_s] [objetivo_mV] [puerto]` — por defecto 10 s,
-3000 mV y `/dev/cu.usbserial-10`. Solo lee (comando `D`). Avisa con alarma si
-la temperatura supera 40 °C, si el PF se reactiva o al alcanzar el objetivo.
+`monitor_charge.sh [interval_s] [target_mV] [port]` — 10 s, 3000 mV and
+`/dev/cu.usbserial-10` by default. Read-only (`D` command). It raises an alarm
+if the temperature exceeds 40 °C, if the PF re-latches, or when the target is
+reached.
 
-Los scripts y la salida del sketch están en inglés.
+### Sketch menu
 
-### Menú del sketch
-
-| Tecla | Acción | Escribe |
+| Key | Action | Writes |
 |---|---|---|
-| `S` | Escanear I2C | no |
-| `W` | Medir SDA/SCL (pull-ups, cortos) | no |
-| `T` | 300 lecturas, cuenta errores | no |
-| `I` | Estado completo | no |
-| `D` | Una línea CSV (para el monitor) | no |
-| `U` | Unseal (clave Spark, si falla TI por defecto) | sí |
-| `F` | Full access (clave TI por defecto) | sí |
-| `P` | `PermanentFailDataReset` (0x0029) con verificación | sí |
-| `R` | `DeviceReset` (0x0041) | sí |
-| `L` | Sellar (0x0030) | sí |
-| `A` | U → P → R (dos rondas si hace falta) → L; pide confirmación si una celda < 2 V | sí |
+| `S` | Scan I2C | no |
+| `W` | Measure SDA/SCL (pull-ups, shorts) | no |
+| `T` | 300 reads, counts errors | no |
+| `I` | Full status | no |
+| `D` | One CSV line (for the monitor) | no |
+| `U` | Unseal (Spark key, TI default as fallback) | yes |
+| `F` | Full access (TI default key) | yes |
+| `P` | `PermanentFailDataReset` (0x0029) with verification | yes |
+| `R` | `DeviceReset` (0x0041) | yes |
+| `L` | Seal (0x0030) | yes |
+| `A` | U → P → R (two rounds if needed) → L; asks for confirmation if a cell is < 2 V | yes |
 
-## Notas de protocolo
+## Protocol notes
 
-- Clave de unseal Spark: `0xCCDF7EE0`, se escribe en `ManufacturerAccess`
-  (0x00) como palabra baja `0x7EE0` y luego alta `0xCCDF`.
-- Lecturas de estado: subcomando a `0x00` y respuesta en bloque desde
+- Spark unseal key: `0xCCDF7EE0`, written to `ManufacturerAccess` (0x00) as
+  the low word `0x7EE0` followed by the high word `0xCCDF`.
+- Status reads: subcommand to `0x00` and block response from
   `ManufacturerData` (0x23). `OperationStatus` (0x0054): `SEC` = bits 8–9
-  (3 sellado, 2 unsealed, 1 full access), `PF` bit 12, `XDSG` 13, `XCHG` 14.
-- Tras `DeviceReset` el chip vuelve sellado solo.
+  (3 sealed, 2 unsealed, 1 full access), `PF` bit 12, `XDSG` 13, `XCHG` 14.
+- After `DeviceReset` the chip comes back sealed on its own.
 
-Diferencias con otros proyectos revisados: algunos leen el nivel de seguridad
-del byte equivocado de la respuesta y tratan `SEC=1` como "unsealed", y envían
-`0x002A`/`0x002B` como "PF clear", subcomandos que en el TRM de TI son otros
-(reset del *black box* y LEDs). Aquí solo se usa `0x0029`.
+Differences from other projects reviewed: some read the security level from
+the wrong byte of the response and treat `SEC=1` as "unsealed", and they send
+`0x002A`/`0x002B` as "PF clear", subcommands that the TI TRM defines as
+something else (black box reset and LEDs). Only `0x0029` is used here.
 
-## Créditos
+## Credits
 
 - [o-gs/dji-firmware-tools#258](https://github.com/o-gs/dji-firmware-tools/issues/258):
-  clave `0xCCDF7EE0` y secuencia `Unseal → PermanentFailDataReset → Seal` para Spark
+  `0xCCDF7EE0` key and the `Unseal → PermanentFailDataReset → Seal` sequence for the Spark
 - [Lishen99/DJI-Spark-Battery-Recovery-ESP32](https://github.com/Lishen99/DJI-Spark-Battery-Recovery-ESP32)
-  y [lv70/spark-battery-nano](https://github.com/lv70/spark-battery-nano)
+  and [lv70/spark-battery-nano](https://github.com/lv70/spark-battery-nano)
 - [davext/unbrick-dji](https://github.com/davext/unbrick-dji)
 
----
+## License
 
-## English summary
-
-Arduino (Uno/Nano) sketch plus three macOS bash scripts to recover DJI Spark
-batteries whose BQ40Z307 ("BQ9003") BMS latched Permanent Fail after deep
-discharge. Unseal key `0xCCDF7EE0`, then `PermanentFailDataReset` (0x0029),
-`DeviceReset`, seal.
-
-If the lowest cell is below the undervoltage threshold (~2.2 V) the PF
-re-latches 2-3 s after the reset. `pf_pump.sh` repeats unseal → clear → reset:
-each short window lets the BMS precharge a few mV from the 12 V / 100 Ω supply.
-On the tested pack the PF stopped re-latching after 3 rounds and the BMS then
-kept precharging on its own with all protections active. `monitor_charge.sh`
-shows a live, fixed-screen dashboard (screenshot above) and logs CSV. Wiring
-option A (12 V supply through 100 Ω) is the one tested here.
-
-Deeply discharged Li-ion cells are a fire risk: charge supervised, on a
-non-flammable surface.
-
-## Licencia
-
-MIT. Ver [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).
