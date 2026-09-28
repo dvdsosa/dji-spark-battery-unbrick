@@ -2,7 +2,9 @@
 
 Recuperación de baterías **DJI Spark** bloqueadas en *Permanent Fail* (PF) tras
 pasar mucho tiempo descargadas, con un Arduino Uno/Nano y tres scripts de
-bash para macOS. Probado con dos baterías reales (celdas entre 1,77 y 2,2 V).
+bash para macOS. Probado con dos baterías reales (celdas entre 1,77 y 2,2 V):
+**las dos se recuperaron** con la fuente de 12 V, `pf_pump.sh` y
+`monitor_charge.sh`.
 
 ![monitor_charge.sh](docs/monitor_charge.png)
 
@@ -22,8 +24,8 @@ bash para macOS. Probado con dos baterías reales (celdas entre 1,77 y 2,2 V).
 | `scripts/reset_pf.sh` | Recuperación de una sola ronda (para celdas ya por encima del umbral) |
 | `scripts/monitor_charge.sh` | Monitor en pantalla fija (sin scroll): tensión por celda con barras, corriente, temperatura, PF y avisos; guarda CSV en `logs/` |
 | `docs/monitor_charge.png` | Captura del monitor durante una precarga real |
-| `docs/cableado_12v.svg` | Esquema con fuente de 12 V y 100 Ω (probado) |
-| `docs/cableado_9v.svg` | Esquema con pila de 9 V (alternativa) |
+| `docs/wiring_12v.svg` | Esquema con fuente de 12 V y 100 Ω (probado) |
+| `docs/wiring_9v.svg` | Esquema con pila de 9 V (alternativa) |
 
 ## El problema
 
@@ -45,7 +47,9 @@ través de 100 Ω). Cada ronda unseal → `0x0029` → reset sube las celdas uno
 más baja 2,20 V), con solo 2 escrituras extra de PF en la flash del BMS, y a
 partir de ahí el BMS entró en precarga normal por sí solo (bit `PCHG` activo),
 con todas sus protecciones activas. En unos minutos las celdas pasaron de
-2,2 V a 2,7 V y el desequilibrio bajó de 207 a 33 mV.
+2,2 V a 2,7 V y el desequilibrio bajó de 207 a 33 mV. La segunda batería
+necesitó lanzar `pf_pump.sh` unas 2–3 veces (con el antiguo límite de 30
+rondas); por eso el límite por defecto es ahora 90.
 
 ## Hardware
 
@@ -61,7 +65,7 @@ Es el montaje con el que se han recuperado las baterías de este repositorio:
 Arduino Uno clónico, GND del Arduino en el pin 2 y la fuente de 12 V en los
 pines 3 (+, a través de 100 Ω) y 5 (−).
 
-![Cableado con fuente de 12 V (probado)](docs/cableado_12v.svg)
+![Cableado con fuente de 12 V (probado)](docs/wiring_12v.svg)
 
 ### Opción B — pila de 9 V (alternativa, no probada aquí)
 
@@ -69,7 +73,7 @@ Montaje descrito por la comunidad: GND del Arduino en el pin 5 y la pila PP3
 directamente en los pines 3 (+) y 2 (−). Una pila de 9 V no puede dar
 corrientes peligrosas, por eso no lleva resistencia en serie.
 
-![Cableado con pila de 9 V (alternativa)](docs/cableado_9v.svg)
+![Cableado con pila de 9 V (alternativa)](docs/wiring_9v.svg)
 
 Los pines 2 y 5 son las dos masas de la batería; compruébalo con el polímetro
 (continuidad ≈ 0 Ω) antes de montar cualquiera de las dos opciones.
@@ -109,9 +113,14 @@ arduino-cli upload -p /dev/cu.usbserial-10 --fqbn arduino:avr:uno spark_unbrick
    avisa a 3,0 V por defecto), quita la fuente y pon la batería en el cargador
    DJI. Vigila la primera carga completa.
 
-`pf_pump.sh [max_rondas] [puerto]` — por defecto 30 rondas. Comprueba el bus
-antes de escribir, pide confirmación (escribir `yes` si alguna celda < 2 V) y
-se detiene por temperatura > 35 °C, fallo de unseal o pérdida de comunicación.
+`pf_pump.sh [max_rondas] [puerto]` — por defecto 90 rondas. Comprueba el bus
+antes de escribir y pide confirmación (escribir `yes` si alguna celda < 2 V).
+Termina solo en cuanto el PF deja de reactivarse (lo comprueba en reposo y
+otra vez 10 s después: `PF stays clear`), o al agotar las rondas, o si la
+temperatura supera 35 °C, falla el unseal o se pierde la comunicación. Cada
+ronda en la que el PF vuelve a saltar es una escritura en la flash del BMS,
+de resistencia limitada: si 90 rondas no bastan, mejor precargar las celdas
+por fuera que seguir insistiendo.
 
 `monitor_charge.sh [intervalo_s] [objetivo_mV] [puerto]` — por defecto 10 s,
 3000 mV y `/dev/cu.usbserial-10`. Solo lee (comando `D`). Avisa con alarma si

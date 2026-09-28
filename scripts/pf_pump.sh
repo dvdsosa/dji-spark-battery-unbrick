@@ -10,13 +10,13 @@
 # Measured on a Spark pack: ~6-10 mV per round; the PF stopped re-latching at
 # round 3 (lowest cell 2.20 V), with only 2 extra PF flash writes.
 #
-# Usage: ./pf_pump.sh [max_rounds] [port]   # default 30, /dev/cu.usbserial-10
+# Usage: ./pf_pump.sh [max_rounds] [port]   # default 90, /dev/cu.usbserial-10
 #
 # Safety: checks bus stability first, asks for confirmation, stops on high
 # temperature, failed unseal or lost communication. Each re-latch writes the
 # BMS data flash, which has limited endurance: keep max_rounds low.
 
-MAX_ROUNDS=${1:-30}
+MAX_ROUNDS=${1:-90}
 PORT=${2:-/dev/cu.usbserial-10}
 TEMP_STOP=350                 # tenths of °C
 REST_S=5                      # wait after each reset before reading at rest
