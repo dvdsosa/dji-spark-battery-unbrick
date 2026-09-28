@@ -5,6 +5,12 @@ discharged for a long time, using an Arduino Uno/Nano and three bash scripts
 for macOS. Tested on two real packs (cells between 1.77 and 2.2 V): **both
 were recovered** with the 12 V supply, `pf_pump.sh` and `monitor_charge.sh`.
 
+**Symptoms this fixes:** DJI Spark battery **not charging**, **won't turn on**
+or looks **dead after long storage**; charger LEDs light briefly and go off;
+battery not recognised by the drone or the charging hub. The cause is an
+over-discharge **Permanent Fail (PF)** latched by the battery's BMS, and it can
+be cleared with a ~3 € Arduino instead of buying a new battery.
+
 ![monitor_charge.sh](docs/monitor_charge.png)
 
 > **Safety.** A Li-ion cell that has been below ~2 V may be internally damaged
