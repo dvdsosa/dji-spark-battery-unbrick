@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="680" height="610" viewBox="0 0 680 610" font-family="Helvetica, Arial, sans-serif" role="img">
+<title>Conexión batería DJI Spark a Arduino con fuente de 12 V (probado)</title>
+<rect width="680" height="610" fill="#FFFFFF"/>
+<g font-size="14" font-weight="600" text-anchor="middle">
+<rect x="290" y="16" width="200" height="50" rx="4" fill="#FAECE7" stroke="#993C1D" stroke-width="0.8"/>
+<text x="390" y="37" fill="#712B13">Fuente 12 V</text>
+<text x="390" y="55" fill="#993C1D" font-size="12" font-weight="400">nunca al Arduino</text>
+</g>
+<g stroke-width="1.8" fill="none">
+<line x1="310" y1="66" x2="310" y2="80" stroke="#D85A30"/>
+<line x1="310" y1="120" x2="310" y2="150" stroke="#D85A30"/>
+<line x1="470" y1="66" x2="470" y2="150" stroke="#888780"/>
+<line x1="150" y1="192" x2="150" y2="472" stroke="#7F77DD"/>
+<line x1="230" y1="192" x2="230" y2="472" stroke="#888780"/>
+<line x1="550" y1="192" x2="550" y2="472" stroke="#7F77DD"/>
+<path d="M150 252 H190 V272" stroke="#7F77DD"/>
+<path d="M550 252 H510 V272" stroke="#7F77DD"/>
+<path d="M190 332 V392 H222 A8 8 0 0 1 238 392 H510 V332" stroke="#D85A30"/>
+<line x1="370" y1="392" x2="370" y2="472" stroke="#D85A30"/>
+</g>
+<g fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.8">
+<rect x="302" y="80" width="16" height="40" rx="2"/>
+<rect x="182" y="272" width="16" height="60" rx="2"/>
+<rect x="502" y="272" width="16" height="60" rx="2"/>
+</g>
+<circle cx="150" cy="252" r="3.5" fill="#7F77DD"/>
+<circle cx="550" cy="252" r="3.5" fill="#7F77DD"/>
+<circle cx="370" cy="392" r="3.5" fill="#D85A30"/>
+<g font-size="12" fill="#444441">
+<text x="296" y="78" text-anchor="end">+</text>
+<text x="326" y="98">R3</text>
+<text x="326" y="114">100 Ω</text>
+<text x="480" y="82">−</text>
+<text x="508" y="104">Batería Spark,</text>
+<text x="508" y="120">contactos hacia ti</text>
+<text x="166" y="306" text-anchor="middle">R1</text>
+<text x="494" y="298" text-anchor="end">R2</text>
+<text x="494" y="314" text-anchor="end">4,7 kΩ</text>
+</g>
+<rect x="100" y="136" width="500" height="72" rx="6" fill="none" stroke="#888780" stroke-width="0.8" stroke-dasharray="4 3"/>
+<g text-anchor="middle">
+<g><rect x="120" y="150" width="60" height="42" rx="4" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.8"/><text x="150" y="168" font-size="14" font-weight="600" fill="#3C3489">SCL</text><text x="150" y="184" font-size="12" fill="#534AB7">pin 1</text></g>
+<g><rect x="200" y="150" width="60" height="42" rx="4" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.8"/><text x="230" y="168" font-size="14" font-weight="600" fill="#444441">GND</text><text x="230" y="184" font-size="12" fill="#5F5E5A">pin 2</text></g>
+<g><rect x="280" y="150" width="60" height="42" rx="4" fill="#FAECE7" stroke="#993C1D" stroke-width="0.8"/><text x="310" y="168" font-size="14" font-weight="600" fill="#712B13">BAT+</text><text x="310" y="184" font-size="12" fill="#993C1D">pin 3</text></g>
+<g><rect x="360" y="150" width="60" height="42" rx="4" fill="#FAECE7" stroke="#993C1D" stroke-width="0.8"/><text x="390" y="168" font-size="14" font-weight="600" fill="#712B13">BAT+</text><text x="390" y="184" font-size="12" fill="#993C1D">pin 4</text></g>
+<g><rect x="440" y="150" width="60" height="42" rx="4" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.8"/><text x="470" y="168" font-size="14" font-weight="600" fill="#444441">GND</text><text x="470" y="184" font-size="12" fill="#5F5E5A">pin 5</text></g>
+<g><rect x="520" y="150" width="60" height="42" rx="4" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.8"/><text x="550" y="168" font-size="14" font-weight="600" fill="#3C3489">SDA</text><text x="550" y="184" font-size="12" fill="#534AB7">pin 6</text></g>
+<rect x="100" y="472" width="500" height="84" rx="6" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.8"/>
+<g font-size="14" font-weight="600" fill="#085041">
+<text x="150" y="494">A5</text><text x="230" y="494">GND</text><text x="370" y="494">5V</text><text x="550" y="494">A4</text>
+<text x="350" y="540">Arduino Uno / Nano, alimentado por USB</text>
+</g>
+<g font-size="12" fill="#0F6E56"><text x="150" y="510">SCL</text><text x="550" y="510">SDA</text></g>
+</g>
+<g font-size="12" fill="#444441">
+<rect x="100" y="578" width="12" height="12" rx="2" fill="#7F77DD"/><text x="118" y="588">datos</text>
+<rect x="170" y="578" width="12" height="12" rx="2" fill="#D85A30"/><text x="188" y="588">alimentación</text>
+<rect x="282" y="578" width="12" height="12" rx="2" fill="#888780"/><text x="300" y="588">masa</text>
+<text x="350" y="588">R1, R2 = 4,7 kΩ · R3 = 100 Ω</text>
+</g>
+</svg>

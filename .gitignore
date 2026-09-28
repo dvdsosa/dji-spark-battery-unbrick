@@ -1,0 +1,4 @@
+logs/
+*.csv
+.DS_Store
+build/
