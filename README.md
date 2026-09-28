@@ -79,10 +79,9 @@ Battery connector, contacts facing you, left to right:
 
 ![Spark battery (MB1-1480mAh-11.4V) connector pinout](docs/spark_pinout.png)
 
-```
-  1     2     3     4     5     6
- SCL   GND   BAT+  BAT+  GND   SDA
-```
+| Pin | 1 | 2 | 3 | 4 | 5 | 6 |
+|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| **Signal** | SCL | GND | BAT+ | BAT+ | GND | SDA |
 
 | Battery | Arduino / supply (option A, tested) |
 |---|---|
@@ -92,15 +91,58 @@ Battery connector, contacts facing you, left to right:
 | 3 BAT+ | Supply +, through 100 Ω |
 | 5 GND | Supply − |
 
-The circuitschools pinout (SDA = pin 5, SCL = pin 6) is for the Mavic Air,
-**not** the Spark.
+## Software
+
+Tested on macOS 26 with:
+
+| Software | Version | Notes |
+|---|---|---|
+| [Homebrew](https://brew.sh) | — | Only used to install `arduino-cli` |
+| [`arduino-cli`](https://arduino.github.io/arduino-cli/) | 1.5.1 | Compiles and uploads the sketch, serial monitor |
+| Arduino AVR core (`arduino:avr`) | 1.8.8 | Board support for Uno/Nano; includes the `Wire` library used by the sketch |
+| bash | 3.2 (macOS built-in) | The scripts only use built-in tools: `stty`, `tput`, `sed`, `date` |
+
+No extra Arduino libraries are needed. Recent macOS versions include the
+driver for the CH340 USB-serial chip used by most clone Uno/Nano boards; if no
+port shows up, try another (data) USB cable before installing a driver.
+
+Install:
+
+```bash
+brew install arduino-cli
+arduino-cli core update-index
+arduino-cli core install arduino:avr
+```
+
+Find the Arduino port (on this setup, `/dev/cu.usbserial-10`):
+
+```bash
+arduino-cli board list
+```
+
+The Arduino IDE also works instead of `arduino-cli`: open
+`spark_unbrick/spark_unbrick.ino`, choose the board and port, upload, and use
+its serial monitor at 115200 baud.
 
 ## Usage
+
+Compile and upload the sketch (for a Nano use `arduino:avr:nano`; clones
+may need `arduino:avr:nano:cpu=atmega328old`):
 
 ```bash
 arduino-cli compile --fqbn arduino:avr:uno spark_unbrick
 arduino-cli upload -p /dev/cu.usbserial-10 --fqbn arduino:avr:uno spark_unbrick
 ```
+
+Open the serial monitor (type the menu keys and press Enter; Ctrl-C to exit):
+
+```bash
+arduino-cli monitor -p /dev/cu.usbserial-10 -c baudrate=115200
+```
+
+All scripts take the port as their last argument if it is not
+`/dev/cu.usbserial-10`. Close the serial monitor before running a script:
+only one program can use the port at a time.
 
 1. Connect the data lines and the supply. In the serial monitor (`S`, `W`,
    `T`, `I`) check that the BMS answers and that the bus test reports
