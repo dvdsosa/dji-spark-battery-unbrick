@@ -145,3 +145,7 @@ the undervoltage threshold (~2.2 V), so move the pack to the DJI charger right
 after clearing. `monitor_carga.sh` shows a live, fixed-screen dashboard and
 logs CSV. Deeply discharged Li-ion cells are a fire risk: charge supervised,
 on a non-flammable surface.
+
+## Licencia
+
+MIT. Ver [LICENSE](LICENSE).
